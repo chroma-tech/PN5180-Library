@@ -375,6 +375,166 @@ ISO15693ErrorCode PN5180ISO15693::getSystemInfo(uint8_t *uid, uint8_t *blockSize
   return ISO15693_EC_OK;
 }
 
+/*
+ * Get System Information, code=3B
+ *
+ * Request format: SOF, Req.Flags, GetSysInfo, InfoFlags, UID (opt.), CRC16, EOF
+ * Response format:
+ *  when ERROR flag is set:
+ *    SOF, Resp.Flags, ErrorCode, CRC16, EOF
+ *
+ *     Response Flags:
+  *    xxxx.3xx0
+  *         |||\_ Error flag: 0=no error, 1=error detected, see error field
+  *         \____ Extension flag: 0=no extension, 1=protocol format is extended
+  *
+  *  If Error flag is set, the following error codes are defined:
+  *    01 = The command is not supported, i.e. the request code is not recognized.
+  *    02 = The command is not recognized, i.e. a format error occurred.
+  *    03 = The option is not supported.
+  *    0F = Unknown error.
+  *    10 = The specific block is not available.
+  *    11 = The specific block is already locked and cannot be locked again.
+  *    12 = The specific block is locked and cannot be changed.
+  *    13 = The specific block was not successfully programmed.
+  *    14 = The specific block was not successfully locked.
+  *    A0-DF = Custom command error codes
+  *
+ *  when ERROR flag is NOT set:
+ *    SOF, Flags, InfoFlags, UID, DSFID (opt.), AFI (opt.), Other fields (opt.), CRC16, EOF
+ *
+ *    InfoFlags:
+ *    8765.3210
+ *         |||\_ DSFID: 0=DSFID not supported, DSFID field NOT present; 1=DSFID supported, DSFID field present
+ *         ||\__ AFI: 0=AFI not supported, AFI field not present; 1=AFI supported, AFI field present
+ *         |\___ VICC memory size:
+ *         |        0=Information on VICC memory size is not supported. Memory size field is present. ???
+ *         |        1=Information on VICC memory size is supported. Memory size field is present.
+ *         \____ IC reference:
+ *                  0=Information on IC reference is not supported. IC reference field is not present.
+ *                  1=Information on IC reference is supported. IC reference field is not present.
+ *        ______ MOI:
+ *                  0 = 1 byte addressing
+ *                  2 = 2 byte addressing
+ *
+ *    VICC memory size:
+ *      xxxb.bbbb nnnn.nnnn [nnnn.nnnn]
+ *        bbbbb - Block size is expressed in number of bytes, on 5 bits, allowing to specify up to 32 bytes i.e. 256 bits.
+ *        nnnn.nnnn [nnnn.nnnn] - Number of blocks is on 8 or 16 bits.
+ *
+ *    IC reference: The IC reference is on 8 bits and its meaning is defined by the IC manufacturer.
+ */
+ISO15693ErrorCode PN5180ISO15693::getSystemInfoExt(uint8_t *uid, uint8_t *blockSize, uint16_t *numBlocks) {
+  uint8_t sysInfo[] = { 0x22, 0x3b, 0x1F, 1,2,3,4,5,6,7,8 };  // UID has LSB first!
+  for (int i=0; i<8; i++) {
+    sysInfo[3+i] = uid[i];
+  }
+
+#ifdef DEBUG
+  PN5180DEBUG("Get System Information");
+  for (int i=0; i<sizeof(sysInfo); i++) {
+    PN5180DEBUG(" ");
+    PN5180DEBUG(formatHex(sysInfo[i]));
+  }
+  PN5180DEBUG("\n");
+#endif
+
+  uint8_t *readBuffer;
+  ISO15693ErrorCode rc = issueISO15693Command(sysInfo, sizeof(sysInfo), &readBuffer);
+  if (ISO15693_EC_OK != rc) {
+    return rc;
+  }
+
+  for (int i=0; i<8; i++) {
+    uid[i] = readBuffer[2+i];
+  }
+
+#ifdef DEBUG
+  PN5180DEBUG("UID=");
+  for (int i=0; i<8; i++) {
+    PN5180DEBUG(formatHex(readBuffer[9-i]));  // UID has LSB first!
+    if (i<2) PN5180DEBUG(":");
+  }
+  PN5180DEBUG("\n");
+#endif
+
+  uint8_t *p = &readBuffer[10];
+
+  uint8_t infoFlags = readBuffer[1];
+  if (infoFlags & 0x01) { // DSFID flag
+    uint8_t dsfid = *p++;
+    PN5180DEBUG("DSFID=");  // Data storage format identifier
+    PN5180DEBUG(formatHex(dsfid));
+    PN5180DEBUG("\n");
+  }
+#ifdef DEBUG
+  else PN5180DEBUG(F("No DSFID\n"));
+#endif
+
+  if (infoFlags & 0x02) { // AFI flag
+    uint8_t afi = *p++;
+    PN5180DEBUG(F("AFI="));  // Application family identifier
+    PN5180DEBUG(formatHex(afi));
+    PN5180DEBUG(F(" - "));
+    switch (afi >> 4) {
+      case 0: PN5180DEBUG(F("All families")); break;
+      case 1: PN5180DEBUG(F("Transport")); break;
+      case 2: PN5180DEBUG(F("Financial")); break;
+      case 3: PN5180DEBUG(F("Identification")); break;
+      case 4: PN5180DEBUG(F("Telecommunication")); break;
+      case 5: PN5180DEBUG(F("Medical")); break;
+      case 6: PN5180DEBUG(F("Multimedia")); break;
+      case 7: PN5180DEBUG(F("Gaming")); break;
+      case 8: PN5180DEBUG(F("Data storage")); break;
+      case 9: PN5180DEBUG(F("Item management")); break;
+      case 10: PN5180DEBUG(F("Express parcels")); break;
+      case 11: PN5180DEBUG(F("Postal services")); break;
+      case 12: PN5180DEBUG(F("Airline bags")); break;
+      default: PN5180DEBUG(F("Unknown")); break;
+    }
+    PN5180DEBUG("\n");
+  }
+#ifdef DEBUG
+  else PN5180DEBUG(F("No AFI\n"));
+#endif
+
+  if (infoFlags & 0x04) { // VICC Memory size
+    *numBlocks = *p++;
+    if (infoFlags & 0x10) { // 2 byte addressing
+      *numBlocks = (*numBlocks) | (*p++ << 8);
+    }
+    *blockSize = *p++;
+    *blockSize = (*blockSize) & 0x1f;
+
+    *blockSize = *blockSize + 1; // range: 1-32
+    *numBlocks = *numBlocks + 1; // range: 1-256
+    uint16_t viccMemSize = (*blockSize) * (*numBlocks);
+
+    PN5180DEBUG("VICC MemSize=");
+    PN5180DEBUG(viccMemSize);
+    PN5180DEBUG(" BlockSize=");
+    PN5180DEBUG(*blockSize);
+    PN5180DEBUG(" NumBlocks=");
+    PN5180DEBUG(*numBlocks);
+    PN5180DEBUG("\n");
+  }
+#ifdef DEBUG
+  else PN5180DEBUG(F("No VICC memory size\n"));
+#endif
+
+  if (infoFlags & 0x08) { // IC reference
+    uint8_t icRef = *p++;
+    PN5180DEBUG("IC Ref=");
+    PN5180DEBUG(formatHex(icRef));
+    PN5180DEBUG("\n");
+  }
+#ifdef DEBUG
+  else PN5180DEBUG(F("No IC ref\n"));
+#endif
+
+  return ISO15693_EC_OK;
+}
+
 
 // ICODE SLIX specific commands
 

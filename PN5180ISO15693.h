@@ -50,6 +50,7 @@ public:
   ISO15693ErrorCode writeSingleBlock(uint8_t *uid, uint8_t blockNo, uint8_t *blockData, uint8_t blockSize);
 
   ISO15693ErrorCode getSystemInfo(uint8_t *uid, uint8_t *blockSize, uint8_t *numBlocks);
+  ISO15693ErrorCode getSystemInfoExt(uint8_t *uid, uint8_t *blockSize, uint16_t *numBlocks);
    
   // ICODE SLIX2 specific commands, see https://www.nxp.com/docs/en/data-sheet/SL2S2602.pdf
   ISO15693ErrorCode getRandomNumber(uint8_t *randomData);
