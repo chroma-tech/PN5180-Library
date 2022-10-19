@@ -635,12 +635,12 @@ bool PN5180ISO15693::setupRF() {
   return true;
 }
 
-const __FlashStringHelper *PN5180ISO15693::strerror(ISO15693ErrorCode errno) {
+const __FlashStringHelper *PN5180ISO15693::strerror(ISO15693ErrorCode err) {
   PN5180DEBUG(F("ISO15693ErrorCode="));
-  PN5180DEBUG(errno);
+  PN5180DEBUG(err);
   PN5180DEBUG("\n");
 
-  switch (errno) {
+  switch (err) {
     case EC_NO_CARD: return F("No card detected!");
     case ISO15693_EC_OK: return F("OK!");
     case ISO15693_EC_NOT_SUPPORTED: return F("Command is not supported!");
@@ -653,7 +653,7 @@ const __FlashStringHelper *PN5180ISO15693::strerror(ISO15693ErrorCode errno) {
     case ISO15693_EC_BLOCK_NOT_PROGRAMMED: return F("Specified block was not successfully programmed!");
     case ISO15693_EC_BLOCK_NOT_LOCKED: return F("Specified block was not successfully locked!");
     default:
-      if ((errno >= 0xA0) && (errno <= 0xDF)) {
+      if ((err >= 0xA0) && (err <= 0xDF)) {
         return F("Custom command error code!");
       }
       else return F("Undefined error code in ISO15693!");
