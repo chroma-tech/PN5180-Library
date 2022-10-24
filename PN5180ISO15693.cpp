@@ -706,13 +706,21 @@ ISO15693ErrorCode PN5180ISO15693::issueISO15693Command(uint8_t *cmd, uint8_t cmd
   PN5180DEBUG("...\n");
 #endif
 
+  clearIRQStatus(TX_IRQ_STAT | IDLE_IRQ_STAT | IDLE_IRQ_STAT | RX_SOF_DET_IRQ_STAT);
+
   sendData(cmd, cmdLen);
   delay(10);
   uint32_t status = getIRQStatus();
   if (0 == (status & RX_SOF_DET_IRQ_STAT)) {
     return EC_NO_CARD;
   }
+
+  // there is a race condition where the tag is removed between RX_SOF and RX flags. Fix with timeout
+  uint32_t startTime = millis();
   while (0 == (status & RX_IRQ_STAT)) {
+    if (millis() - startTime > 100) {
+      return EC_NO_CARD;
+    }
     delay(10);
     status = getIRQStatus();
   }
