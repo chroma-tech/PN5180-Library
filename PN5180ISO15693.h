@@ -49,6 +49,8 @@ public:
   ISO15693ErrorCode readSingleBlock(uint8_t *uid, uint8_t blockNo, uint8_t *blockData, uint8_t blockSize);
   ISO15693ErrorCode writeSingleBlock(uint8_t *uid, uint8_t blockNo, uint8_t *blockData, uint8_t blockSize);
 
+  ISO15693ErrorCode writeMessage(uint8_t *uid, uint8_t *msg, size_t len);
+
   ISO15693ErrorCode getSystemInfo(uint8_t *uid, uint8_t *blockSize, uint8_t *numBlocks);
   ISO15693ErrorCode getSystemInfoExt(uint8_t *uid, uint8_t *blockSize, uint16_t *numBlocks);
    

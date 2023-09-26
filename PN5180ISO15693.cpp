@@ -221,6 +221,67 @@ ISO15693ErrorCode PN5180ISO15693::writeSingleBlock(uint8_t *uid, uint8_t blockNo
   return ISO15693_EC_OK;
 }
 
+
+/*
+ * WriteMessage , code=AA
+ *
+ * Request format: SOF, Requ.Flags, WriteMessage, IC Code, UID (opt.), MsgLen-1, MsgData (len=MsgLen), CRC16, EOF
+ * Response format:
+ *  when ERROR flag is set:
+ *    SOF, Resp.Flags, ErrorCode, CRC16, EOF
+ *
+ *     Response Flags:
+  *    xxxx.3xx0
+  *         |||\_ Error flag: 0=no error, 1=error detected, see error field
+  *         \____ Extension flag: 0=no extension, 1=protocol format is extended
+  *
+  *  If Error flag is set, the following error codes are defined:
+  *    01 = The command is not supported, i.e. the request code is not recognized.
+  *    02 = The command is not recognized, i.e. a format error occurred.
+  *    03 = The option is not supported.
+  *    0F = Unknown error.
+  *    10 = The specific block is not available.
+  *    11 = The specific block is already locked and cannot be locked again.
+  *    12 = The specific block is locked and cannot be changed.
+  *    13 = The specific block was not successfully programmed.
+  *    14 = The specific block was not successfully locked.
+  *    A0-DF = Custom command error codes
+ *
+ *  when ERROR flag is NOT set:
+ *    SOF, Resp.Flags, CRC16, EOF
+ */
+ISO15693ErrorCode writeMessage(uint8_t *uid, uint8_t *msg, size_t len)
+{
+  //                         flags, cmd, mfg,  uid,             msgLen-1
+  uint8_t writeMessage[] = { 0x22, 0xAA, 0x02, 1,2,3,4,5,6,7,8, len-1}; // UID has LSB first!
+  //                           |\- high data rate
+  //                           \-- no options, addressed by UID
+
+  uint8_t writeCmdSize = sizeof(writeMessage) + len;
+  uint8_t *writeCmd = (uint8_t*)malloc(writeCmdSize);
+  uint8_t pos = 0;
+  writeCmd[pos++] = writeSingleBlock[0];
+  writeCmd[pos++] = writeSingleBlock[1];
+  writeCmd[pos++] = writeSingleBlock[2];
+  for (int i=0; i<8; i++) {
+    writeCmd[pos++] = uid[i];
+  }
+  writeCmd[pos++] = len-1;
+  for (int i=0; i<len; i++) {
+    writeCmd[pos++] = msg[i];
+  }
+
+  uint8_t *resultPtr;
+  ISO15693ErrorCode rc = issueISO15693Command(writeCmd, writeCmdSize, &resultPtr);
+  if (ISO15693_EC_OK != rc) {
+    free(writeCmd);
+    return rc;
+  }
+
+  free(writeCmd);
+  return ISO15693_EC_OK;
+}
+
 /*
  * Get System Information, code=2B
  *
