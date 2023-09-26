@@ -250,7 +250,7 @@ ISO15693ErrorCode PN5180ISO15693::writeSingleBlock(uint8_t *uid, uint8_t blockNo
  *  when ERROR flag is NOT set:
  *    SOF, Resp.Flags, CRC16, EOF
  */
-ISO15693ErrorCode writeMessage(uint8_t *uid, uint8_t *msg, size_t len)
+ISO15693ErrorCode PN5180ISO15693::writeMessage(uint8_t *uid, uint8_t *msg, size_t len)
 {
   //                         flags, cmd, mfg,  uid,             msgLen-1
   uint8_t writeMessage[] = { 0x22, 0xAA, 0x02, 1,2,3,4,5,6,7,8, len-1}; // UID has LSB first!
@@ -260,9 +260,9 @@ ISO15693ErrorCode writeMessage(uint8_t *uid, uint8_t *msg, size_t len)
   uint8_t writeCmdSize = sizeof(writeMessage) + len;
   uint8_t *writeCmd = (uint8_t*)malloc(writeCmdSize);
   uint8_t pos = 0;
-  writeCmd[pos++] = writeSingleBlock[0];
-  writeCmd[pos++] = writeSingleBlock[1];
-  writeCmd[pos++] = writeSingleBlock[2];
+  writeCmd[pos++] = writeMessage[0];
+  writeCmd[pos++] = writeMessage[1];
+  writeCmd[pos++] = writeMessage[2];
   for (int i=0; i<8; i++) {
     writeCmd[pos++] = uid[i];
   }
@@ -281,6 +281,37 @@ ISO15693ErrorCode writeMessage(uint8_t *uid, uint8_t *msg, size_t len)
   free(writeCmd);
   return ISO15693_EC_OK;
 }
+
+
+ISO15693ErrorCode PN5180ISO15693::writeConfig(uint8_t *uid, uint8_t reg, uint8_t val)
+{
+  //               flags, cmd,  mfg,  uid,             
+  uint8_t cmd[] = { 0x22, 0xA1, 0x02, 1,2,3,4,5,6,7,8, reg, val}; // UID has LSB first!
+  //                           |\- high data rate
+  //                           \-- no options, addressed by UID
+
+  memcpy(&cmd[3], uid, 8);
+
+  uint8_t *resultPtr;
+  ISO15693ErrorCode rc = issueISO15693Command(cmd, sizeof(cmd), &resultPtr);
+  return rc;
+}
+
+
+ISO15693ErrorCode PN5180ISO15693::writeDynamicConfig(uint8_t *uid, uint8_t reg, uint8_t val)
+{
+  //               flags, cmd,  mfg,  uid,             
+  uint8_t cmd[] = { 0x22, 0xAE, 0x02, 1,2,3,4,5,6,7,8, reg, val}; // UID has LSB first!
+  //                           |\- high data rate
+  //                           \-- no options, addressed by UID
+
+  memcpy(&cmd[3], uid, 8);
+
+  uint8_t *resultPtr;
+  ISO15693ErrorCode rc = issueISO15693Command(cmd, sizeof(cmd), &resultPtr);
+  return rc;
+}
+
 
 /*
  * Get System Information, code=2B
@@ -826,7 +857,7 @@ ISO15693ErrorCode PN5180ISO15693::issueISO15693Command(uint8_t *cmd, uint8_t cmd
     PN5180DEBUG("ERROR code=");
     PN5180DEBUG(formatHex(errorCode));
     PN5180DEBUG(" - ");
-    PN5180DEBUG(strerror(errorCode));
+    PN5180DEBUG(strerror((ISO15693ErrorCode)errorCode));
     PN5180DEBUG("\n");
 
     if (errorCode >= 0xA0) { // custom command error codes

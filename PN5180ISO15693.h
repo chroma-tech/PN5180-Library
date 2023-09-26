@@ -49,6 +49,8 @@ public:
   ISO15693ErrorCode readSingleBlock(uint8_t *uid, uint8_t blockNo, uint8_t *blockData, uint8_t blockSize);
   ISO15693ErrorCode writeSingleBlock(uint8_t *uid, uint8_t blockNo, uint8_t *blockData, uint8_t blockSize);
 
+  ISO15693ErrorCode writeDynamicConfig(uint8_t *uid, uint8_t reg, uint8_t val);
+  ISO15693ErrorCode writeConfig(uint8_t *uid, uint8_t reg, uint8_t val);
   ISO15693ErrorCode writeMessage(uint8_t *uid, uint8_t *msg, size_t len);
 
   ISO15693ErrorCode getSystemInfo(uint8_t *uid, uint8_t *blockSize, uint8_t *numBlocks);
